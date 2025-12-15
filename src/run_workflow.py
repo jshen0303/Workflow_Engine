@@ -8,7 +8,7 @@ from engine.process import ingest_workflow_file
 from engine.executor import execute_workflow
 
 def main():
-    workflow_path = SRC_ROOT / "workflows" / "user_onboarding.json"
+    workflow_path = SRC_ROOT / "workflows" / "parallel.json"
 
     print("\n==============================")
     print("🚀 START WORKFLOW RUN")

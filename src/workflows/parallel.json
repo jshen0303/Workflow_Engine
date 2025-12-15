@@ -1,0 +1,27 @@
+{
+    "workflow_id": "parallel_test",
+    "nodes": {
+      "start": {
+        "type": "data_fetch",
+        "config": { "query": "SELECT * FROM users WHERE id = ${input.user_id}" }
+      },
+      "branch_1": {
+        "type": "api_request",
+        "config": { "url": "https://api.example.com/a", "method": "GET" }
+      },
+      "branch_2": {
+        "type": "api_request",
+        "config": { "url": "https://api.example.com/b", "method": "GET" }
+      },
+      "merge": {
+        "type": "send_email",
+        "config": { "to": "${start.email}", "subject": "Both complete", "template": "test"}
+      }
+    },
+    "edges": [
+      { "from": "start", "to": "branch_1" },
+      { "from": "start", "to": "branch_2" },
+      { "from": "branch_1", "to": "merge" },
+      { "from": "branch_2", "to": "merge" }
+    ]
+  }

@@ -1,6 +1,7 @@
 import time
 from typing import Dict
 from uuid import UUID
+import datetime
 
 from api.db import (
     create_run,
@@ -62,7 +63,6 @@ def execute_workflow(workflow_id, trigger_input):
             with ThreadPoolExecutor(max_workers=len(runnable)) as executor: # we use max workers as len of runnable so all processes can run at same time
                 for node in runnable:
                     node_id = node["id"]
-
                     node_run = create_node_run(
                         run_id=run_id,
                         node_id=node_id,
@@ -80,7 +80,7 @@ def execute_workflow(workflow_id, trigger_input):
                 max_attempts = 3
 
                 for future in as_completed(futures):
-                    node, node_run = futures[future]
+                    node, node_run = futures[future] # need to fix, when it fails and retries it tries to recreate the node run but fails because of duplicate key
                     node_id = node["id"]
                     attempt = node_run.get("retries", 0)
 
@@ -138,6 +138,7 @@ def execute_workflow(workflow_id, trigger_input):
                     '''
 
         update_run_status(run_id, "success")
+        update_run_status(run_id, datetime.now())
         return context
 
     except Exception as e:

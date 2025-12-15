@@ -1,0 +1,21 @@
+{
+    "workflow_id": "linear_test",
+    "nodes": {
+      "fetch": {
+        "type": "data_fetch",
+        "config": { "query": "SELECT * FROM users WHERE id = ${input.user_id}" }
+      },
+      "enrich": {
+        "type": "api_request",
+        "config": { "url": "https://api.example.com/enrich", "method": "POST" }
+      },
+      "notify": {
+        "type": "send_email",
+        "config": { "to": "${fetch.email}", "subject": "Complete", "template": "test"}
+      }
+    },
+    "edges": [
+      { "from": "fetch", "to": "enrich" },
+      { "from": "enrich", "to": "notify" }
+    ]
+  }

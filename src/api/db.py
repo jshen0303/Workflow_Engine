@@ -72,6 +72,9 @@ def create_run(workflow_id):
 def update_run_status(run_id, status):
     supabase.table("runs").update({"status": status}).eq("id", str(run_id)).execute()
 
+def update_run_status(run_id, finished_at):
+    supabase.table("runs").update({"finished_at": finished_at}).eq("id", str(run_id)).execute()
+
 # node runs
 
 def create_node_run(run_id,node_id,input):
