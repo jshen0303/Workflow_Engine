@@ -10,14 +10,13 @@ const NODE_COLORS = {
   send_email: '#22c55e',
 }
 
-// Build graph levels from edges for proper branch visualization
-function buildGraphLevels(nodes, edges) {
+// Build graph levels and positions from edges
+function buildGraphLayout(nodes, edges) {
   const nodeNames = Object.keys(nodes)
-  if (nodeNames.length === 0) return []
+  if (nodeNames.length === 0) return { levels: [], positions: {}, edges: [] }
 
-  // Build adjacency maps
-  const children = {} // node -> nodes it points to
-  const parents = {}  // node -> nodes that point to it
+  const children = {}
+  const parents = {}
   
   nodeNames.forEach(name => {
     children[name] = []
@@ -29,10 +28,8 @@ function buildGraphLevels(nodes, edges) {
     if (parents[e.to]) parents[e.to].push(e.from)
   })
 
-  // Find root nodes (no parents)
   const roots = nodeNames.filter(n => parents[n].length === 0)
   
-  // BFS to assign levels
   const levels = {}
   const queue = roots.map(r => ({ node: r, level: 0 }))
   const visited = new Set()
@@ -40,34 +37,45 @@ function buildGraphLevels(nodes, edges) {
   while (queue.length > 0) {
     const { node, level } = queue.shift()
     if (visited.has(node)) {
-      // Update to max level if revisited
       levels[node] = Math.max(levels[node] || 0, level)
       continue
     }
     visited.add(node)
     levels[node] = level
-
     children[node].forEach(child => {
       queue.push({ node: child, level: level + 1 })
     })
   }
 
-  // Handle disconnected nodes
   nodeNames.forEach(name => {
     if (levels[name] === undefined) levels[name] = 0
   })
 
-  // Group by level
   const maxLevel = Math.max(...Object.values(levels))
-  const result = []
+  const levelGroups = []
   for (let i = 0; i <= maxLevel; i++) {
-    const nodesAtLevel = nodeNames.filter(n => levels[n] === i)
-    if (nodesAtLevel.length > 0) {
-      result.push(nodesAtLevel)
-    }
+    levelGroups.push(nodeNames.filter(n => levels[n] === i))
   }
 
-  return result
+  // Compute positions (x, y) for each node
+  const NODE_WIDTH = 150
+  const NODE_HEIGHT = 80
+  const H_GAP = 30
+  const V_GAP = 60
+  const positions = {}
+  
+  levelGroups.forEach((group, levelIdx) => {
+    const totalWidth = group.length * NODE_WIDTH + (group.length - 1) * H_GAP
+    const startX = -totalWidth / 2
+    group.forEach((name, idx) => {
+      positions[name] = {
+        x: startX + idx * (NODE_WIDTH + H_GAP) + NODE_WIDTH / 2,
+        y: levelIdx * (NODE_HEIGHT + V_GAP) + NODE_HEIGHT / 2
+      }
+    })
+  })
+
+  return { levels: levelGroups, positions, edges, nodeWidth: NODE_WIDTH, nodeHeight: NODE_HEIGHT }
 }
 
 function App() {
@@ -91,9 +99,9 @@ function App() {
 }`)
   const executionIdRef = useRef(null)
 
-  const graphLevels = useMemo(() => {
-    if (!workflow) return []
-    return buildGraphLevels(workflow.nodes, workflow.edges)
+  const graphLayout = useMemo(() => {
+    if (!workflow) return { levels: [], positions: {}, edges: [], nodeWidth: 150, nodeHeight: 80 }
+    return buildGraphLayout(workflow.nodes, workflow.edges)
   }, [workflow])
 
   const refreshWorkflows = () => {
@@ -119,28 +127,34 @@ function App() {
     if (!polling || !executionIdRef.current) return
     
     const execId = executionIdRef.current
+    let stopped = false
+    let completedCount = 0
     
     const fetchStatus = async () => {
+      if (stopped) return
       try {
         const r = await fetch(`${API_BASE}/executions/${execId}`)
         const data = await r.json()
+        if (stopped) return
         setExecution(data)
-        if (data.status === 'completed' || data.status === 'partial') {
-          // Do one more fetch to ensure we have final data, then stop
-          setTimeout(async () => {
-            const finalR = await fetch(`${API_BASE}/executions/${execId}`)
-            const finalData = await finalR.json()
-            setExecution(finalData)
+        
+        // When completed, keep polling a few more times to ensure we have all data
+        if (data.status === 'completed' || data.status === 'partial' || data.status === 'failed') {
+          completedCount++
+          if (completedCount >= 3) {
+            stopped = true
             setPolling(false)
-          }, 200)
+          }
         }
       } catch (e) {
         console.error(e)
       }
     }
     
-    const interval = setInterval(fetchStatus, 300)
-    return () => clearInterval(interval)
+    // Fetch immediately, then every 200ms
+    fetchStatus()
+    const interval = setInterval(fetchStatus, 200)
+    return () => { stopped = true; clearInterval(interval) }
   }, [polling])
 
   const runWorkflow = async () => {
@@ -253,61 +267,84 @@ function App() {
             <div className="content">
               <div className="graph-section">
                 <h3>Node Graph</h3>
-                <div className="graph">
-                  {graphLevels.map((level, levelIdx) => (
-                    <div key={levelIdx} className="graph-level-wrapper">
-                      <div className={`graph-level ${level.length > 1 ? 'parallel' : ''}`}>
-                        {level.map(name => {
-                          const node = workflow.nodes[name]
-                          const nodeStatus = getNodeStatus(name)
+                <div className="graph-container">
+                  {(() => {
+                    const { levels, positions, edges, nodeWidth, nodeHeight } = graphLayout
+                    if (levels.length === 0) return null
+                    
+                    // Calculate SVG dimensions
+                    const allX = Object.values(positions).map(p => p.x)
+                    const allY = Object.values(positions).map(p => p.y)
+                    const minX = Math.min(...allX) - nodeWidth/2 - 20
+                    const maxX = Math.max(...allX) + nodeWidth/2 + 20
+                    const maxY = Math.max(...allY) + nodeHeight/2 + 20
+                    const svgWidth = maxX - minX
+                    const svgHeight = maxY + 20
+                    const offsetX = -minX
+
+                    return (
+                      <svg width={svgWidth} height={svgHeight} className="graph-svg">
+                        <defs>
+                          <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#555" />
+                          </marker>
+                        </defs>
+                        
+                        {/* Draw edges */}
+                        {edges.map((edge, idx) => {
+                          const from = positions[edge.from]
+                          const to = positions[edge.to]
+                          if (!from || !to) return null
                           return (
-                            <div key={name} className="node-container">
-                              <div 
-                                className={`node ${nodeStatus?.status || ''} ${selectedNode === name ? 'selected' : ''}`}
-                                style={{ 
-                                  borderColor: selectedNode === name ? 'var(--accent)' : (nodeStatus ? statusColor(nodeStatus.status) : NODE_COLORS[node.type] || '#666'),
-                                  boxShadow: nodeStatus?.status === 'running' ? `0 0 20px ${statusColor(nodeStatus.status)}` : (selectedNode === name ? '0 0 0 3px var(--accent-glow)' : 'none'),
-                                  cursor: 'pointer'
-                                }}
-                                onClick={() => setSelectedNode(selectedNode === name ? null : name)}
-                              >
-                                <div className="node-header">
-                                  <span 
-                                    className="node-type-dot" 
-                                    style={{ background: NODE_COLORS[node.type] || '#666' }}
-                                  />
-                                  <span className="node-name">{name}</span>
-                                </div>
-                                <div className="node-type mono">{node.type}</div>
-                                {nodeStatus && (
-                                  <div className="node-status" style={{ color: statusColor(nodeStatus.status) }}>
-                                    {nodeStatus.status} {nodeStatus.attempts > 1 && `(${nodeStatus.attempts} attempts)`}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                            <line
+                              key={idx}
+                              x1={from.x + offsetX}
+                              y1={from.y + nodeHeight/2}
+                              x2={to.x + offsetX}
+                              y2={to.y - nodeHeight/2}
+                              stroke="#555"
+                              strokeWidth="2"
+                              markerEnd="url(#arrowhead)"
+                            />
                           )
                         })}
-                      </div>
-                      {levelIdx < graphLevels.length - 1 && (
-                        <div className="level-connector">
-                          {level.length > 1 ? (
-                            <div className="merge-lines">
-                              <div className="merge-horizontal" />
-                              <div className="merge-vertical" />
-                            </div>
-                          ) : graphLevels[levelIdx + 1]?.length > 1 ? (
-                            <div className="split-lines">
-                              <div className="split-vertical" />
-                              <div className="split-horizontal" />
-                            </div>
-                          ) : (
-                            <div className="edge-arrow">↓</div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        
+                        {/* Draw nodes */}
+                        {Object.entries(positions).map(([name, pos]) => {
+                          const node = workflow.nodes[name]
+                          const nodeStatus = getNodeStatus(name)
+                          const isSelected = selectedNode === name
+                          const borderColor = isSelected ? '#06b6d4' : (nodeStatus ? statusColor(nodeStatus.status) : NODE_COLORS[node.type] || '#666')
+                          
+                          return (
+                            <g
+                              key={name}
+                              transform={`translate(${pos.x + offsetX - nodeWidth/2}, ${pos.y - nodeHeight/2})`}
+                              onClick={() => setSelectedNode(isSelected ? null : name)}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <rect
+                                width={nodeWidth}
+                                height={nodeHeight}
+                                rx="8"
+                                fill="#1a1a2e"
+                                stroke={borderColor}
+                                strokeWidth={isSelected ? 3 : 2}
+                              />
+                              <circle cx="12" cy="18" r="5" fill={NODE_COLORS[node.type] || '#666'} />
+                              <text x="22" y="22" fill="#e0e0e0" fontSize="13" fontWeight="600">{name}</text>
+                              <text x="10" y="42" fill="#888" fontSize="11" fontFamily="monospace">{node.type}</text>
+                              {nodeStatus && (
+                                <text x="10" y="62" fill={statusColor(nodeStatus.status)} fontSize="10">
+                                  {nodeStatus.status}{nodeStatus.attempts > 1 ? ` (${nodeStatus.attempts}x)` : ''}
+                                </text>
+                              )}
+                            </g>
+                          )
+                        })}
+                      </svg>
+                    )
+                  })()}
                 </div>
 
                 {selectedNode && workflow.nodes[selectedNode] && (
@@ -397,7 +434,7 @@ function App() {
                 {execution?.nodes && Object.keys(execution.nodes).length > 0 && (
                   <div className="results">
                     <h4>Results</h4>
-                    {graphLevels.flat().filter(name => execution.nodes[name]).map(name => {
+                    {graphLayout.levels.flat().filter(name => execution.nodes[name]).map(name => {
                       const node = execution.nodes[name]
                       return (
                         <div key={name} className="result-item">

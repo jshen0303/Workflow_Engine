@@ -160,34 +160,23 @@
 }
 
 /* Graph */
-.graph {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
-  padding: 20px;
-}
-
-.graph-level-wrapper {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.graph-level {
+.graph-container {
   display: flex;
   justify-content: center;
-  gap: 24px;
+  padding: 24px;
+  overflow: auto;
 }
 
-.graph-level.parallel {
-  gap: 32px;
+.graph-svg {
+  display: block;
 }
 
-.node-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+.graph-svg text {
+  user-select: none;
+}
+
+.graph-svg g:hover rect {
+  filter: brightness(1.2);
 }
 
 .node {
@@ -247,82 +236,6 @@
 .edge-arrow {
   color: var(--text-muted);
   font-size: 1.25rem;
-}
-
-/* Split lines (one to many) */
-.split-lines {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.split-vertical {
-  width: 2px;
-  height: 16px;
-  background: var(--border);
-}
-
-.split-horizontal {
-  width: 120px;
-  height: 2px;
-  background: var(--border);
-  position: relative;
-}
-
-.split-horizontal::before,
-.split-horizontal::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  width: 2px;
-  height: 16px;
-  background: var(--border);
-}
-
-.split-horizontal::before {
-  left: 0;
-}
-
-.split-horizontal::after {
-  right: 0;
-}
-
-/* Merge lines (many to one) */
-.merge-lines {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.merge-horizontal {
-  width: 120px;
-  height: 2px;
-  background: var(--border);
-  position: relative;
-}
-
-.merge-horizontal::before,
-.merge-horizontal::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  width: 2px;
-  height: 16px;
-  background: var(--border);
-}
-
-.merge-horizontal::before {
-  left: 0;
-}
-
-.merge-horizontal::after {
-  right: 0;
-}
-
-.merge-vertical {
-  width: 2px;
-  height: 16px;
-  background: var(--border);
 }
 
 /* Control Section */

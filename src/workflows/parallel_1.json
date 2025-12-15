@@ -1,0 +1,184 @@
+{
+  "workflow_id": "fanout_4_2_1",
+  "nodes": {
+    "start": {
+      "type": "data_fetch",
+      "config": {
+        "query": "SELECT * FROM users WHERE id = ${input.user_id}"
+      }
+    },
+    "l1_a": {
+      "type": "api_request",
+      "config": {
+        "url": "https://api.example.com/a",
+        "method": "GET"
+      }
+    },
+    "l1_b": {
+      "type": "api_request",
+      "config": {
+        "url": "https://api.example.com/b",
+        "method": "GET"
+      }
+    },
+    "l1_c": {
+      "type": "api_request",
+      "config": {
+        "url": "https://api.example.com/c",
+        "method": "GET"
+      }
+    },
+    "l1_d": {
+      "type": "api_request",
+      "config": {
+        "url": "https://api.example.com/d",
+        "method": "GET"
+      }
+    },
+    "l2_a1": {
+      "type": "api_request",
+      "config": {
+        "url": "https://api.example.com/a/1",
+        "method": "GET"
+      }
+    },
+    "l2_a2": {
+      "type": "api_request",
+      "config": {
+        "url": "https://api.example.com/a/2",
+        "method": "GET"
+      }
+    },
+    "l2_b1": {
+      "type": "api_request",
+      "config": {
+        "url": "https://api.example.com/b/1",
+        "method": "GET"
+      }
+    },
+    "l2_b2": {
+      "type": "api_request",
+      "config": {
+        "url": "https://api.example.com/b/2",
+        "method": "GET"
+      }
+    },
+    "l2_c1": {
+      "type": "api_request",
+      "config": {
+        "url": "https://api.example.com/c/1",
+        "method": "GET"
+      }
+    },
+    "l2_c2": {
+      "type": "api_request",
+      "config": {
+        "url": "https://api.example.com/c/2",
+        "method": "GET"
+      }
+    },
+    "l2_d1": {
+      "type": "api_request",
+      "config": {
+        "url": "https://api.example.com/d/1",
+        "method": "GET"
+      }
+    },
+    "l2_d2": {
+      "type": "api_request",
+      "config": {
+        "url": "https://api.example.com/d/2",
+        "method": "GET"
+      }
+    },
+    "merge": {
+      "type": "send_email",
+      "config": {
+        "to": "${start.email}",
+        "subject": "All branches complete"
+      }
+    }
+  },
+  "edges": [
+    {
+      "from": "start",
+      "to": "l1_a"
+    },
+    {
+      "from": "start",
+      "to": "l1_b"
+    },
+    {
+      "from": "start",
+      "to": "l1_c"
+    },
+    {
+      "from": "start",
+      "to": "l1_d"
+    },
+    {
+      "from": "l1_a",
+      "to": "l2_a1"
+    },
+    {
+      "from": "l1_a",
+      "to": "l2_a2"
+    },
+    {
+      "from": "l1_b",
+      "to": "l2_b1"
+    },
+    {
+      "from": "l1_b",
+      "to": "l2_b2"
+    },
+    {
+      "from": "l1_c",
+      "to": "l2_c1"
+    },
+    {
+      "from": "l1_c",
+      "to": "l2_c2"
+    },
+    {
+      "from": "l1_d",
+      "to": "l2_d1"
+    },
+    {
+      "from": "l1_d",
+      "to": "l2_d2"
+    },
+    {
+      "from": "l2_a1",
+      "to": "merge"
+    },
+    {
+      "from": "l2_a2",
+      "to": "merge"
+    },
+    {
+      "from": "l2_b1",
+      "to": "merge"
+    },
+    {
+      "from": "l2_b2",
+      "to": "merge"
+    },
+    {
+      "from": "l2_c1",
+      "to": "merge"
+    },
+    {
+      "from": "l2_c2",
+      "to": "merge"
+    },
+    {
+      "from": "l2_d1",
+      "to": "merge"
+    },
+    {
+      "from": "l2_d2",
+      "to": "merge"
+    }
+  ]
+}

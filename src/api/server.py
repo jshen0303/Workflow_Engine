@@ -91,10 +91,12 @@ def get_execution(execution_id: UUID):
     node_id_to_name = {n["id"]: n["name"] for n in nodes}
 
     node_results = {}
+    all_node_names = set(node_id_to_name.values())
 
     for nr in node_runs:
-        name = node_id_to_name[nr["node_id"]]
-
+        name = node_id_to_name.get(nr["node_id"])
+        if not name:
+            continue
         node_results[name] = {
             "status": nr["status"],
             "attempts": nr["retries"] + 1,
@@ -102,8 +104,12 @@ def get_execution(execution_id: UUID):
             "error": nr["output"].get("error") if nr["status"] == "failed" else None,
         }
 
+    # Check if all nodes have completed
+    completed_nodes = set(node_results.keys())
     statuses = {nr["status"] for nr in node_runs}
-    if "running" in statuses or "pending" in statuses:
+    
+    # Still running if: missing nodes, or any node is running/pending
+    if len(completed_nodes) < len(all_node_names) or "running" in statuses or "pending" in statuses:
         overall = "running"
     elif "failed" in statuses:
         overall = "partial"
