@@ -1,15 +1,15 @@
 from nodes.utils import resolve
+from api.db import supabase
 
 
 
 def run(config, context):
     query = resolve(config["query"], context)
 
-    print(f"[DataFetch] executing query:")
-    print(query)
-
+    res = supabase.rpc("execute_sql", {"query": query}).execute()
     return {
-        "id": 123,
-        "email": "user@example.com",
-        "name": "Test User"
+        "id": context["input"]["user_id"],
+        "email": f"{res.data}@gmail.com",
+        "name":res.data
     }
+

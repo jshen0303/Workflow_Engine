@@ -97,3 +97,8 @@ def update_node_run(node_run_id: UUID,status: str,output: Dict[str, Any] = {},re
 
 def list_node_runs(run_id):
     return supabase.table("node_runs").select("*").eq("run_id", str(run_id)).execute().data
+
+#for data fetch worker node
+def get_user_name(user_id): 
+    return supabase.table("users").select("name").eq("id", user_id).single().execute().data["name"]
+

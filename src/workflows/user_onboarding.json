@@ -8,7 +8,7 @@
       "fetch_user": {
         "type": "data_fetch",
         "config": {
-          "query": "SELECT * FROM users WHERE id = ${input.user_id}"
+          "query": "SELECT name FROM users WHERE id = ${input.user_id}"
         }
       },
       "enrich_profile": {
