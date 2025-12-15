@@ -1,3 +1,4 @@
+import time
 from typing import Dict
 from uuid import UUID
 
@@ -75,12 +76,54 @@ def execute_workflow(workflow_id, trigger_input):
 
                     future = executor.submit(run_node, node, context_snapshot)
                     futures[future] = (node, node_run)
-                    
+                
+                max_attempts = 3
 
                 for future in as_completed(futures):
                     node, node_run = futures[future]
                     node_id = node["id"]
+                    attempt = node_run.get("retries", 0)
 
+                    try:
+                        output = future.result(timeout=30) 
+
+                        update_node_run(
+                            node_run_id=node_run["id"],
+                            status="success",
+                            output=output
+                        )
+
+                        node_name = id_to_name[node_id]
+                        context[node_name] = output
+                        completed.add(node_id)
+                    
+                    except Exception as e:
+                        attempt += 1
+
+                        if attempt < max_attempts:
+                            delay = min(30, 2 ** attempt)
+                            time.sleep(delay)
+
+                            update_node_run(
+                                node_run_id=node_run["id"],
+                                status="running",
+                                retries=attempt
+                            )
+
+                            #send node back
+                            future = executor.submit(run_node, node, context_snapshot)
+                            futures[future] = (node, node_run)
+
+                        else:
+                            update_node_run(
+                                node_run_id=node_run["id"],
+                                status="failed",
+                                output={"error": str(e)}
+                            )
+
+                            completed.add(node_id)
+
+                    '''
                     output = future.result()
 
                     update_node_run(
@@ -92,7 +135,7 @@ def execute_workflow(workflow_id, trigger_input):
                     node_name = id_to_name[node_id]
                     context[node_name] = output
                     completed.add(node_id)
-
+                    '''
 
         update_run_status(run_id, "success")
         return context
