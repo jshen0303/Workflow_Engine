@@ -97,9 +97,14 @@ def get_execution(execution_id: UUID):
         name = node_id_to_name.get(nr["node_id"])
         if not name:
             continue
+        if nr["retries"] == 3:
+            attempts = 3
+        else:
+            attempts = nr["retries"] + 1
+
         node_results[name] = {
             "status": nr["status"],
-            "attempts": nr["retries"] + 1,
+            "attempts": attempts,
             "output": nr["output"] if nr["status"] == "success" else None,
             "error": nr["output"].get("error") if nr["status"] == "failed" else None,
         }

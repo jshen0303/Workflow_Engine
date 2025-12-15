@@ -98,6 +98,8 @@ function App() {
   "edges": []
 }`)
   const executionIdRef = useRef(null)
+  // Store execution results per workflow to persist across navigation
+  const executionCacheRef = useRef({})
 
   const graphLayout = useMemo(() => {
     if (!workflow) return { levels: [], positions: {}, edges: [], nodeWidth: 150, nodeHeight: 80 }
@@ -138,6 +140,14 @@ function App() {
         if (stopped) return
         setExecution(data)
         
+        // Update cache with latest execution state
+        if (selected) {
+          executionCacheRef.current[selected] = {
+            execution: data,
+            executionId: execId
+          }
+        }
+        
         // When completed, keep polling a few more times to ensure we have all data
         if (data.status === 'completed' || data.status === 'partial' || data.status === 'failed') {
           completedCount++
@@ -155,7 +165,7 @@ function App() {
     fetchStatus()
     const interval = setInterval(fetchStatus, 200)
     return () => { stopped = true; clearInterval(interval) }
-  }, [polling])
+  }, [polling, selected])
 
   const runWorkflow = async () => {
     if (!selected) return
@@ -169,6 +179,11 @@ function App() {
       const data = await res.json()
       setExecution(data)
       executionIdRef.current = data.execution_id
+      // Update cache with new execution
+      executionCacheRef.current[selected] = {
+        execution: data,
+        executionId: data.execution_id
+      }
       setPolling(true)
     } catch (e) {
       alert('Invalid JSON or execution error: ' + e.message)
@@ -232,7 +247,28 @@ function App() {
             <button
               key={w.name}
               className={`workflow-item ${selected === w.name ? 'active' : ''}`}
-              onClick={() => { setSelected(w.name); setExecution(null); setSelectedNode(null); executionIdRef.current = null; setPolling(false); }}
+              onClick={() => {
+                // Save current execution to cache before switching
+                if (selected && execution) {
+                  executionCacheRef.current[selected] = {
+                    execution,
+                    executionId: executionIdRef.current
+                  }
+                }
+                // Stop polling when switching
+                setPolling(false)
+                // Restore cached execution for the new workflow or clear
+                const cached = executionCacheRef.current[w.name]
+                if (cached) {
+                  setExecution(cached.execution)
+                  executionIdRef.current = cached.executionId
+                } else {
+                  setExecution(null)
+                  executionIdRef.current = null
+                }
+                setSelected(w.name)
+                setSelectedNode(null)
+              }}
             >
               <span className="workflow-name">{w.name}</span>
               <span className="workflow-meta">{w.node_count} nodes</span>
