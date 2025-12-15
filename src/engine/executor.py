@@ -10,6 +10,7 @@ from api.db import (
     list_edges,
 )
 from engine.worker import run_node
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 
@@ -52,32 +53,46 @@ def execute_workflow(workflow_id, trigger_input):
             if not runnable:
                 break
 
-            for node in runnable:
-                node_id = node["id"]
+            # snapshot context for concurrency
+            context_snapshot = dict(context)
 
-                node_run = create_node_run(
-                    run_id=run_id,
-                    node_id=node_id,
-                    input=context
-                )
+            futures = {}
 
-                update_node_run(
-                    node_run_id=node_run["id"],
-                    status="running"
-                )
+            with ThreadPoolExecutor(max_workers=len(runnable)) as executor: # we use max workers as len of runnable so all processes can run at same time
+                for node in runnable:
+                    node_id = node["id"]
 
-                output = run_node(node, context)
+                    node_run = create_node_run(
+                        run_id=run_id,
+                        node_id=node_id,
+                        input=context_snapshot
+                    )
 
-                update_node_run(
-                    node_run_id=node_run["id"],
-                    status="success",
-                    output=output
-                )
+                    update_node_run(
+                        node_run_id=node_run["id"],
+                        status="running"
+                    )
 
-                # update in-memory ctxt
-                node_name = id_to_name[node_id]
-                context[node_name] = output
-                completed.add(node_id)
+                    future = executor.submit(run_node, node, context_snapshot)
+                    futures[future] = (node, node_run)
+                    
+
+                for future in as_completed(futures):
+                    node, node_run = futures[future]
+                    node_id = node["id"]
+
+                    output = future.result()
+
+                    update_node_run(
+                        node_run_id=node_run["id"],
+                        status="success",
+                        output=output
+                    )
+
+                    node_name = id_to_name[node_id]
+                    context[node_name] = output
+                    completed.add(node_id)
+
 
         update_run_status(run_id, "success")
         return context
