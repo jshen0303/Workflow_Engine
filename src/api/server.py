@@ -1,9 +1,11 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Dict, Any
+from typing import Dict, Any, List
 from uuid import UUID
 from datetime import datetime
 import sys
+import json
 from pathlib import Path
 
 from engine.executor import execute_workflow
@@ -24,6 +26,14 @@ SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class ExecuteRequest(BaseModel):
     workflow: str
@@ -113,7 +123,6 @@ def get_execution(execution_id: UUID):
 @app.get("/health")
 def health():
     active = supabase.table("runs").select("id", count="exact").eq("status", "running").execute().count
-    
 
     return {
         "status": "healthy",
@@ -121,5 +130,78 @@ def health():
     }
 
 
+@app.get("/workflows")
+def list_workflows_api():
+    #get the workflows
+    workflows_dir = SRC_ROOT / "workflows"
+    workflows = []
+    
+    for f in workflows_dir.glob("*.json"):
+        with open(f) as file:
+            data = json.load(file)
+            workflows.append({
+                "name": f.stem,
+                "workflow_id": data.get("workflow_id", f.stem),
+                "node_count": len(data.get("nodes", {})),
+                "edge_count": len(data.get("edges", []))
+            })
+    
+    return {"workflows": workflows}
 
 
+@app.get("/workflows/{workflow_name}")
+def get_workflow_api(workflow_name: str): #get workflow def w nodes and edges
+    
+    workflow_path = SRC_ROOT / "workflows" / f"{workflow_name}.json"
+    
+    if not workflow_path.exists():
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    
+    with open(workflow_path) as f:
+        data = json.load(f)
+    
+    return {
+        "name": workflow_name,
+        "workflow_id": data.get("workflow_id", workflow_name),
+        "nodes": data.get("nodes", {}),
+        "edges": data.get("edges", [])
+    }
+
+
+class CreateWorkflowRequest(BaseModel):
+    name: str
+    workflow: Dict[str, Any]
+
+
+@app.post("/workflows", status_code=201)
+def create_workflow_api(req: CreateWorkflowRequest):
+    #validate name
+    if not req.name or not req.name.strip():
+        raise HTTPException(status_code=400, detail="Workflow name is required")
+    
+    name = req.name.strip().replace(" ", "_").lower()
+    workflow_path = SRC_ROOT / "workflows" / f"{name}.json"
+    
+    if workflow_path.exists():
+        raise HTTPException(status_code=400, detail="Workflow with this name already exists")
+    
+    #validate workflow has nodes+edges
+    if "nodes" not in req.workflow:
+        raise HTTPException(status_code=400, detail="Workflow must have 'nodes'")
+    if "edges" not in req.workflow:
+        raise HTTPException(status_code=400, detail="Workflow must have 'edges'")
+    
+    workflow_data = req.workflow.copy()
+    if "workflow_id" not in workflow_data:
+        workflow_data["workflow_id"] = name
+    
+    #save to file
+    with open(workflow_path, "w") as f:
+        json.dump(workflow_data, f, indent=2)
+    
+    return {
+        "name": name,
+        "workflow_id": workflow_data["workflow_id"],
+        "node_count": len(workflow_data.get("nodes", {})),
+        "edge_count": len(workflow_data.get("edges", []))
+    }
