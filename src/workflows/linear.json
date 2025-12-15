@@ -11,7 +11,7 @@
       },
       "notify": {
         "type": "send_email",
-        "config": { "to": "${fetch.email}", "subject": "Complete", "template": "test"}
+        "config": { "to": "${fetch.email}", "subject": "Complete"}
       }
     },
     "edges": [

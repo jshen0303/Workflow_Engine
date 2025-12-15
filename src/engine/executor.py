@@ -16,10 +16,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 
-def execute_workflow(workflow_id, trigger_input):
+def execute_workflow(workflow_id, trigger_input, run_id=None):
     #ccreate run following the api.db method
-    run = create_run(workflow_id)
-    run_id = run["id"]
+    if run_id is None:
+        run = create_run(workflow_id)
+        run_id = run["id"]
 
     update_run_status(run_id, "running")
 
@@ -80,67 +81,55 @@ def execute_workflow(workflow_id, trigger_input):
                 max_attempts = 3
 
                 for future in as_completed(futures):
-                    node, node_run = futures[future] # need to fix, when it fails and retries it tries to recreate the node run but fails because of duplicate key
+                    node, node_run = futures[future]
                     node_id = node["id"]
                     attempt = node_run.get("retries", 0)
 
-                    try:
-                        output = future.result(timeout=30) 
-
-                        update_node_run(
-                            node_run_id=node_run["id"],
-                            status="success",
-                            output=output
-                        )
-
-                        node_name = id_to_name[node_id]
-                        context[node_name] = output
-                        completed.add(node_id)
-                    
-                    except Exception as e:
-                        attempt += 1
-
-                        if attempt < max_attempts:
-                            delay = min(30, 2 ** attempt)
-                            time.sleep(delay)
+                    #retry loop for this node
+                    while True:
+                        try:
+                            output = future.result(timeout=30) 
 
                             update_node_run(
                                 node_run_id=node_run["id"],
-                                status="running",
-                                retries=attempt
+                                status="success",
+                                output=output
                             )
 
-                            #send node back
-                            future = executor.submit(run_node, node, context_snapshot)
-                            futures[future] = (node, node_run)
-
-                        else:
-                            update_node_run(
-                                node_run_id=node_run["id"],
-                                status="failed",
-                                output={"error": str(e)}
-                            )
-
+                            node_name = id_to_name[node_id]
+                            context[node_name] = output
                             completed.add(node_id)
+                            break  # Success
+                        
+                        except Exception as e:
+                            attempt += 1
 
-                    '''
-                    output = future.result()
+                            if attempt < max_attempts:
+                                delay = min(30, 2 ** attempt)
+                                time.sleep(delay)
 
-                    update_node_run(
-                        node_run_id=node_run["id"],
-                        status="success",
-                        output=output
-                    )
+                                update_node_run(
+                                    node_run_id=node_run["id"],
+                                    status="running",
+                                    retries=attempt
+                                )
 
-                    node_name = id_to_name[node_id]
-                    context[node_name] = output
-                    completed.add(node_id)
-                    '''
+                                future = executor.submit(run_node, node, context_snapshot)
 
-        update_run_status(run_id, "success")
-        update_run_status(run_id, datetime.now())
+                            else:
+                                update_node_run(
+                                    node_run_id=node_run["id"],
+                                    status="failed",
+                                    retries=attempt,
+                                    output={"error": str(e)}
+                                )
+
+                                completed.add(node_id)
+                                break  # Max attempts reached
+
+        update_run_status(run_id, "success", datetime.datetime.now())
         return context
 
     except Exception as e:
-        update_run_status(run_id, "failed")
+        update_run_status(run_id, "failed", datetime.datetime.now())
         raise

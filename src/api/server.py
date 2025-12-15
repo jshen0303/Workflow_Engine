@@ -10,7 +10,6 @@ from engine.executor import execute_workflow
 from engine.process import ingest_workflow
 from engine.process import ingest_workflow_file
 from api.db import (
-    create_run,
     list_node_runs,
     list_nodes,
 )
@@ -39,6 +38,7 @@ class ExecuteResponse(BaseModel):
 
 SRC_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(SRC_ROOT))
+jobs = []
 
 
 @app.post("/execute", status_code=202, response_model=ExecuteResponse)
@@ -51,12 +51,13 @@ def execute_workflow_api(req: ExecuteRequest, background_tasks: BackgroundTasks)
 
     #create run
     run = supabase.table("runs").insert({"workflow_id": str(workflow_id), "status": "pending"}).execute().data[0]
-
+    
     #execute
     background_tasks.add_task(
         execute_workflow,
         workflow_id=workflow_id,
         trigger_input=req.input,
+        run_id=run["id"],
     )
 
     return {

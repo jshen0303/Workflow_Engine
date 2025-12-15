@@ -69,11 +69,11 @@ def create_run(workflow_id):
     return res.data[0]
 
 
-def update_run_status(run_id, status):
-    supabase.table("runs").update({"status": status}).eq("id", str(run_id)).execute()
-
-def update_run_status(run_id, finished_at):
-    supabase.table("runs").update({"finished_at": finished_at}).eq("id", str(run_id)).execute()
+def update_run_status(run_id, status, finished_at=None):
+    payload = {"status": status}
+    if finished_at is not None:
+        payload["finished_at"] = finished_at.isoformat() if hasattr(finished_at, 'isoformat') else finished_at
+    supabase.table("runs").update(payload).eq("id", str(run_id)).execute()
 
 # node runs
 
