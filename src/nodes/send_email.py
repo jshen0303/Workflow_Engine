@@ -7,11 +7,6 @@ def run(config, context):
     subject = config["subject"]
     template = config["template"]
 
-    print("[SendEmail]")
-    print(f"  to={to}")
-    print(f"  subject={subject}")
-    print(f"  template={template}")
-
     return {
         "sent": True
     }
